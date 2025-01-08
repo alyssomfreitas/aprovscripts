@@ -6,6 +6,30 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+# Função para limpar instalações mal sucedidas
+cleanup_failed_install() {
+    local ctid=$1
+    echo -e "\n${BLUE}➤ Limpando instalação mal sucedida...${NC}"
+    
+    # Remove o arquivo de configuração se existir
+    if [ -f "/etc/pve/lxc/${ctid}.conf" ]; then
+        rm -f "/etc/pve/lxc/${ctid}.conf"
+    fi
+    
+    # Remove o diretório de imagens se existir
+    if [ -d "/var/lib/vz/images/${ctid}" ]; then
+        rm -rf "/var/lib/vz/images/${ctid}"
+    fi
+    
+    # Remove snapshots se existirem
+    if [ -d "/var/lib/vz/snapshots/${ctid}" ]; then
+        rm -rf "/var/lib/vz/snapshots/${ctid}"
+    fi
+    
+    show_progress 2 "Limpando arquivos residuais"
+    echo -e "${GREEN}Limpeza concluída!${NC}"
+}
+
 # Função para exibir barra de progresso
 show_progress() {
     local duration=$1
@@ -26,6 +50,7 @@ show_progress() {
 check_error() {
     if [ $? -ne 0 ]; then
         echo -e "\n${RED}Erro: $1${NC}"
+        cleanup_failed_install $NEXT_CTID
         exit 1
     fi
 }
@@ -36,6 +61,18 @@ echo "╔═══════════════════════�
 echo "║     Proxmox Container Creator Script      ║"
 echo "╚═══════════════════════════════════════════╝"
 echo -e "${NC}"
+
+# Verificar se há instalações mal sucedidas
+echo -e "${GREEN}➤ Verificando instalações residuais...${NC}"
+for ctid in $(ls /etc/pve/lxc/ 2>/dev/null | grep -oE '^[0-9]+' || true); do
+    if [ ! -f "/var/lib/vz/images/${ctid}/vm-${ctid}-disk-0.raw" ] && [ -f "/etc/pve/lxc/${ctid}.conf" ]; then
+        echo -e "${RED}Detectada instalação incompleta do CT ${ctid}${NC}"
+        read -p "Deseja limpar esta instalação? (s/n): " clean
+        if [ "$clean" = "s" ]; then
+            cleanup_failed_install $ctid
+        fi
+    fi
+done
 
 # Coletar informações necessárias
 echo -e "${GREEN}➤ Por favor, forneça as seguintes informações:${NC}\n"
@@ -75,6 +112,7 @@ show_progress 2 "Verificando template"
 # Criar o container
 echo -e "\n${GREEN}➤ Criando container...${NC}"
 
+# Redireciona a saída para /dev/null mas mantém os erros visíveis
 pct create $NEXT_CTID /var/lib/vz/template/cache/$TEMPLATE \
     --hostname $CT_HOSTNAME \
     --password $CT_PASSWORD \
@@ -88,22 +126,23 @@ pct create $NEXT_CTID /var/lib/vz/template/cache/$TEMPLATE \
     --nameserver $DNS_SERVER \
     --ostype ubuntu \
     --onboot 1 \
-    --protection 0
+    --protection 0 > /dev/null 2>&1
 
 check_error "Falha ao criar o container"
-show_progress 5 "Criando container"
+show_progress 10 "Criando container"
 
 # Iniciar o container
 echo -e "\n${GREEN}➤ Iniciando container...${NC}"
-sleep 2  # Pequena pausa para garantir que a configuração foi salva
-pct start $NEXT_CTID
+sleep 2
+pct start $NEXT_CTID > /dev/null 2>&1
 check_error "Falha ao iniciar o container"
 show_progress 3 "Iniciando container"
 
 # Verificar status do container
 echo -e "\n${GREEN}➤ Verificando status do container...${NC}"
-pct status $NEXT_CTID
+STATUS=$(pct status $NEXT_CTID)
 check_error "Falha ao verificar status do container"
+show_progress 2 "Verificando status"
 
 # Exibir resumo
 echo -e "\n${BLUE}═══ Resumo da Criação do Container ═══${NC}"
@@ -113,5 +152,6 @@ echo -e "IP: ${GREEN}$IP_ADDRESS${NC}"
 echo -e "CPU Cores: ${GREEN}$CPU_CORES${NC}"
 echo -e "Memória: ${GREEN}$MEMORY MB${NC}"
 echo -e "Disco: ${GREEN}$DISK_SIZE GB${NC}"
+echo -e "Status: ${GREEN}$STATUS${NC}"
 
 echo -e "\n${GREEN}Container criado com sucesso!${NC}"
