@@ -10,6 +10,12 @@ validate_ip() {
     fi
 }
 
+# Verificar se o comando pct está disponível
+if ! command -v pct &> /dev/null; then
+    echo "Erro: O comando 'pct' não foi encontrado. Certifique-se de que o Proxmox está instalado corretamente."
+    exit 1
+fi
+
 # Solicitar informações ao usuário
 read -p "Digite o hostname do container: " HOSTNAME
 read -s -p "Digite a senha do container: " PASSWORD
