@@ -45,8 +45,6 @@ BRIDGE="vmbr0"
 MOUNT_OPTIONS="noatime,discard"
 ACLS="1"
 UNPRIVILEGED="1"
-NESTING="1"
-FIREWALL="1"
 
 # Obter o próximo CTID disponível
 CTID=$(pvesh get /cluster/nextid)
@@ -62,15 +60,13 @@ pct create $CTID \
     --hostname $HOSTNAME \
     --password $PASSWORD \
     --unprivileged $UNPRIVILEGED \
-    --nesting $NESTING \
     --storage $STORAGE \
     --rootfs $STORAGE:$DISK_SIZE,mountoptions=$MOUNT_OPTIONS,acl=$ACLS \
     --cores $CPU_CORES \
     --memory $MEMORY \
     --net0 name=$NETWORK_NAME,bridge=$BRIDGE,ip=$IPV4/24,gw=$GATEWAY \
     --nameserver $DNS_SERVER \
-    --onboot 1 \
-    --firewall $FIREWALL
+    --onboot 1
 
 # Verificar se o container foi criado com sucesso
 if [ $? -eq 0 ]; then
@@ -84,6 +80,14 @@ else
     echo "Erro ao criar o container."
     exit 1
 fi
+
+# Configurar nesting manualmente
+echo "Configurando nesting..."
+pct set $CTID --features nesting=1
+
+# Configurar firewall manualmente
+echo "Configurando firewall..."
+pct set $CTID --firewall 1
 
 # Iniciar o container
 echo "Iniciando o container..."
