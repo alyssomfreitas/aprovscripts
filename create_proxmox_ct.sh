@@ -3,6 +3,7 @@
 # Cores para output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
+RED='\033[0;31m'
 NC='\033[0m'
 
 # Função para exibir barra de progresso
@@ -19,6 +20,14 @@ show_progress() {
         ((progress+=2))
     done
     echo
+}
+
+# Função para verificar erros
+check_error() {
+    if [ $? -ne 0 ]; then
+        echo -e "\n${RED}Erro: $1${NC}"
+        exit 1
+    fi
 }
 
 # Banner de boas-vindas
@@ -51,11 +60,16 @@ read -p "Digite o servidor DNS: " DNS_SERVER
 # Encontrar próximo CTID disponível
 echo -e "\n${GREEN}➤ Buscando próximo CTID disponível...${NC}"
 NEXT_CTID=$(pvesh get /cluster/nextid)
+check_error "Falha ao obter próximo CTID"
 show_progress 2 "Verificando CTID"
 
 # Verificar se o template existe
 echo -e "\n${GREEN}➤ Verificando template Ubuntu 22.04...${NC}"
 TEMPLATE="ubuntu-22.04-standard_22.04-1_amd64.tar.zst"
+if [ ! -f "/var/lib/vz/template/cache/$TEMPLATE" ]; then
+    echo -e "${RED}Template não encontrado. Por favor, faça o download primeiro.${NC}"
+    exit 1
+fi
 show_progress 2 "Verificando template"
 
 # Criar o container
@@ -72,19 +86,24 @@ pct create $NEXT_CTID /var/lib/vz/template/cache/$TEMPLATE \
     --memory $MEMORY \
     --net0 name=eth0,bridge=vmbr0,ip=$IP_ADDRESS,gw=$GATEWAY \
     --nameserver $DNS_SERVER \
-    --mp0 local:0/mp0,mp=/mnt/data \
     --ostype ubuntu \
     --onboot 1 \
-    --protection 0 \
-    --acl 1 \
-    --firewall 1
+    --protection 0
 
+check_error "Falha ao criar o container"
 show_progress 5 "Criando container"
 
 # Iniciar o container
 echo -e "\n${GREEN}➤ Iniciando container...${NC}"
+sleep 2  # Pequena pausa para garantir que a configuração foi salva
 pct start $NEXT_CTID
+check_error "Falha ao iniciar o container"
 show_progress 3 "Iniciando container"
+
+# Verificar status do container
+echo -e "\n${GREEN}➤ Verificando status do container...${NC}"
+pct status $NEXT_CTID
+check_error "Falha ao verificar status do container"
 
 # Exibir resumo
 echo -e "\n${BLUE}═══ Resumo da Criação do Container ═══${NC}"
