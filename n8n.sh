@@ -42,6 +42,9 @@ sudo docker pull n8nio/n8n
 sudo docker pull redis
 progress_bar 60
 
+# Prompt for webhook URL
+read -p "Digite a URL externa para o webhook do n8n: " webhook_url
+
 # Set up Docker Compose
 prompt_to_continue "Configurando Docker Compose."
 cat <<EOL > docker-compose.yml
@@ -61,6 +64,10 @@ services:
       - N8N_BASIC_AUTH_USER=admin
       - N8N_BASIC_AUTH_PASSWORD=admin
       - N8N_REDIS_HOST=redis
+      - N8N_REDIS_PORT=6379
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - WEBHOOK_URL=$webhook_url
     depends_on:
       - redis
     restart: always
@@ -72,9 +79,12 @@ prompt_to_continue "Iniciando serviços com Docker Compose."
 sudo docker-compose up -d
 progress_bar 90
 
-# Prompt for webhook URL
-read -p "Digite a URL para o webhook do n8n: " webhook_url
-echo "Webhook configurado para: $webhook_url"
+# Show service status
+echo -e "\nServiços iniciados com sucesso!"
+echo "n8n está disponível na porta 5678."
+echo "URL configurada para o webhook: $webhook_url"
+echo "Redis está rodando na porta 6379."
+
 progress_bar 100
 
 # End script
